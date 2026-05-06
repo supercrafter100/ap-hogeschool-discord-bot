@@ -39,8 +39,23 @@ export default class Bot extends Client<true> {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
 
+        await this.initAI();
+
         await this.events.start();
         this.events.load(join(__dirname, '../events'));
-        this.commands.loadFromDirectory(join(__dirname, '../commands'));
+        // this.commands.loadFromDirectory(join(__dirname, '../commands'));
+    }
+
+    private async initAI() {
+        try {
+            this.logger.info('OER laden...');
+            const { loadOerText } = await import('../ai/oerLoader.js');
+            const { initAgent } = await import('../ai/agent.js');
+            const oerText = await loadOerText();
+            initAgent(oerText);
+            this.logger.info('AI-agent klaar.');
+        } catch (err) {
+            this.logger.error('Kon AI-agent niet initialiseren:', err);
+        }
     }
 }
