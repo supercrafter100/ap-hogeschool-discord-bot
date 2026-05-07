@@ -112,13 +112,15 @@ function olodLegacyToText(fiche: LegacyOlodFiche): string {
                     lines.push(`Leerinhoud: ${stripHtml(String(c['text'] ?? ''))}`);
                     break;
                 case 'comp_courses_info': {
-                    // Keuzeopties (richting waartoe dit vak behoort)
                     const opleidingen = c['opleidingen'] as Array<any> | undefined;
                     if (opleidingen) {
                         const keuzeopties = opleidingen
                             .flatMap((o: any) => (o.keuzeopties as string[] | undefined) ?? [])
                             .filter((v, i, a) => a.indexOf(v) === i);
-                        if (keuzeopties.length) lines.push(`Keuzeoptie/richting: ${keuzeopties.join(', ')}`);
+                        if (keuzeopties.length) {
+                            // Explicitly flag as optional minor so the agent doesn't present it as a common subject
+                            lines.push(`⚠️ OPTIONELE MINOR (niet voor alle studenten): ${keuzeopties.join(', ')}`);
+                        }
                     }
                     break;
                 }
@@ -178,7 +180,9 @@ function trajectToText(traject: Traject): string {
     if (traject.opleidingNaam) lines.push(`Opleiding: ${traject.opleidingNaam}`);
 
     const procesOptionalBlock = (block: OptionalCourseBlock, indent = '    ') => {
-        lines.push(`${indent}Keuzeblok: ${block.title}${block.description ? ` — ${block.description}` : ''}`);
+        // Explicitly label as optional minor so the agent doesn't treat these as common subjects
+        lines.push(`${indent}[OPTIONELE MINOR — alleen voor studenten die "${block.title}" kozen]`);
+        if (block.description) lines.push(`${indent}${block.description}`);
         for (const c of block.courses) {
             lines.push(`${indent}  - ${c.naam} (${c.studiepunten} SP, id: ${c.url})`);
         }
@@ -284,9 +288,12 @@ export const ectsTools = [
         },
         {
             name: 'zoek_opleiding_of_vak',
-            description: 'Zoek een opleiding of opleidingsonderdeel (vak) op naam in de ECTS-studiegids. Geeft namen, url-codes en directe links terug.',
+            description:
+                'Zoek een opleiding of opleidingsonderdeel (vak) op naam in de ECTS-studiegids. ' +
+                'Gebruik ALTIJD een korte, eenvoudige zoekterm — alleen de naam, NOOIT een code (PBA-TI, url, etc.) erbij. ' +
+                'Goed: "toegepaste informatica". Fout: "toegepaste informatica PBA-TI".',
             schema: z.object({
-                zoekterm: z.string().describe('De naam van de opleiding of het vak'),
+                zoekterm: z.string().describe('Korte naam van de opleiding of het vak, zonder codes of extra woorden'),
                 jaar: z.string().optional().describe('Academiejaar, bv. "2025-26". Standaard het huidige jaar.'),
             }),
         },

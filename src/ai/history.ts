@@ -36,6 +36,11 @@ export function getHistory(chainId: string): BaseMessage[] {
     return messages.slice(-MAX_HISTORY_MESSAGES);
 }
 
+/** Build a one-message synthetic history from a previous bot reply (e.g. after restart). */
+export function syntheticHistory(botResponse: string): BaseMessage[] {
+    return [new AIMessage(botResponse)];
+}
+
 export function recordExchange(params: {
     chainId: string;
     question: string;
