@@ -6,7 +6,27 @@ import {
     findChainByBotMessage,
     getHistory,
     recordExchange,
+    syntheticHistory,
 } from '../ai/history.js';
+
+// Reply to a message, falling back to a plain channel send if the message was deleted.
+// On fallback, the user's original question is quoted so context isn't lost.
+async function safeReply(
+    target: Message<boolean>,
+    content: string,
+    fallbackQuestion?: string,
+): Promise<Message<boolean>> {
+    try {
+        return await target.reply(content);
+    } catch {
+        const prefix = fallbackQuestion
+            ? `> ${fallbackQuestion.split('\n').join('\n> ')}\n\n`
+            : '';
+        // We're always in a guild text channel — cast away the DM/group-DM variants
+        const ch = target.channel as { send(content: string): Promise<Message<boolean>> };
+        return await ch.send(`${prefix}${content}`);
+    }
+}
 
 function splitMessage(text: string, maxLength = 2000): string[] {
     if (text.length <= maxLength) return [text];
@@ -36,25 +56,35 @@ export default class MessageCreate extends Event<'messageCreate'> {
         const botId = this.client.user.id;
         const mentionPrefix = `<@${botId}>`;
         const isMention = msg.content.startsWith(mentionPrefix);
+        const botIsTagged = msg.mentions.users.has(botId);
 
-        // Controleer of dit een reply is op een botbericht uit een bestaande chain
+        // Look up existing chain for the referenced message
         let existingChainId: string | undefined;
         if (msg.reference?.messageId) {
             existingChainId = findChainByBotMessage(msg.reference.messageId);
         }
 
-        // Bij een chain-reply: alleen reageren als de bot ook effectief getagd is.
-        // Als de gebruiker de mention-toggle uitgeschakeld heeft, staat de bot
-        // niet in msg.mentions.users en negeren we het bericht.
-        const botIsTagged = msg.mentions.users.has(botId);
-        if (!isMention && (existingChainId === undefined || !botIsTagged)) return;
+        // Fetch the referenced message for context injection + restart detection
+        let referencedMsg: Message<boolean> | undefined;
+        if (msg.reference?.messageId) {
+            try {
+                referencedMsg = await msg.channel.messages.fetch(msg.reference.messageId);
+            } catch { /* deleted or unavailable */ }
+        }
 
-        // Haal de vraag op (strip mention prefix indien aanwezig)
+        const isReplyToBot = referencedMsg?.author.id === botId;
+        const isChainContinuation = existingChainId !== undefined && botIsTagged;
+        // After a restart the chain is lost — if the user replies to an old bot message
+        // with the mention toggle on, treat it as a fresh chain with context.
+        const isRestartReply = isReplyToBot && existingChainId === undefined && botIsTagged;
+
+        if (!isMention && !isChainContinuation && !isRestartReply) return;
+
+        // Strip mention prefix from question
         const question = isMention
             ? msg.content.slice(mentionPrefix.length).trim()
             : msg.content.trim();
 
-        // Lege mention zonder vraag → beknopte help
         if (!question) {
             await msg.reply(
                 'Hallo! Stel me een vraag over het OER of de ECTS-studiegids van AP Hogeschool.',
@@ -70,7 +100,19 @@ export default class MessageCreate extends Event<'messageCreate'> {
 
         // Chain ophalen of aanmaken
         const chainId = existingChainId ?? startChain();
-        const chatHistory = getHistory(chainId);
+        let chatHistory = getHistory(chainId);
+
+        // Restart case: inject the old bot reply as synthetic AI context
+        if (isRestartReply && referencedMsg) {
+            chatHistory = syntheticHistory(referencedMsg.content);
+        }
+
+        // Reply-to-other-user + @mention: prepend that message as quoted context
+        let fullQuestion = question;
+        if (isMention && referencedMsg && !isReplyToBot) {
+            const excerpt = referencedMsg.content.slice(0, 500);
+            fullQuestion = `[Geciteerd bericht van @${referencedMsg.author.username}]: "${excerpt}"\n\n${question}`;
+        }
 
         // Typing indicator, vernieuwd elke 8 seconden
         const sendTyping = () => void msg.channel.sendTyping();
@@ -105,7 +147,8 @@ export default class MessageCreate extends Event<'messageCreate'> {
 
         try {
             const answer = await askAgent({
-                question,
+                question: fullQuestion,
+                userId: msg.author.id,
                 userRoles,
                 chatHistory,
                 onToolStart: (toolName) => {
@@ -130,13 +173,14 @@ export default class MessageCreate extends Event<'messageCreate'> {
             for (let i = 0; i < chunks.length; i++) {
                 const isLast = i === chunks.length - 1;
                 const content = isLast ? `${chunks[i]}\n\n${DISCLAIMER}` : chunks[i]!;
-                lastMsg = await lastMsg.reply(content);
+                // Pass the question only on the first chunk so it's quoted when the original message was deleted
+                lastMsg = await safeReply(lastMsg, content, i === 0 ? question : undefined);
                 sentMessageIds.push(lastMsg.id);
             }
 
             recordExchange({
                 chainId,
-                question,
+                question: fullQuestion,
                 answer,
                 botMessageIds: sentMessageIds,
             });
