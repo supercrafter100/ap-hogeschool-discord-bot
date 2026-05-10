@@ -194,7 +194,7 @@ export default class MessageCreate extends Event<'messageCreate'> {
             clearInterval(typingInterval);
             this.logger.error(`[AI] Fout na ${Date.now() - t0}ms:`, err);
             const errText = 'Er is een fout opgetreden. Probeer het later opnieuw.\n' +
-                'Bij dringende vragen: **trajectbegeleiding.bachelor.it@ap.be**';
+                'Bij dringende vragen: **bachelor.it@ap.be** (algemeen) of **trajectbegeleiding.bachelor.it@ap.be** (persoonlijk traject)';
             if (statusMsg) {
                 await statusMsg.edit(errText);
             } else {

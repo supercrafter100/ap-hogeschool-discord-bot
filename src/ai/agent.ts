@@ -15,7 +15,7 @@ import Logger from '../util/Logger.js';
 import chalk from 'chalk';
 
 export const DISCLAIMER =
-    '-# Dit bericht is gegenereerd met AI en kan fouten bevatten, bij onduidelijkheid kun je altijd terecht bij trajectbegeleiding.bachelor.it@ap.be';
+    '-# Dit bericht is gegenereerd met AI en kan fouten bevatten, bij onduidelijkheid kun je altijd terecht bij bachelor.it@ap.be (algemeen) of trajectbegeleiding.bachelor.it@ap.be (persoonlijk traject)';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let agentInstance: ReactAgent<any> | null = null;
