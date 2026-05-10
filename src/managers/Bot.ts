@@ -39,6 +39,9 @@ export default class Bot extends Client<true> {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
 
+        const { startMetricsServer } = await import('../util/metrics.js');
+        startMetricsServer();
+
         await this.initAI();
 
         await this.events.start();
@@ -48,11 +51,10 @@ export default class Bot extends Client<true> {
 
     private async initAI() {
         try {
-            this.logger.info('OER laden...');
-            const { loadOerText } = await import('../ai/oerLoader.js');
             const { initAgent } = await import('../ai/agent.js');
-            const oerText = await loadOerText();
-            initAgent(oerText);
+            const { watchPrompt } = await import('../ai/promptLoader.js');
+            initAgent();
+            watchPrompt(() => initAgent());
             this.logger.info('AI-agent klaar.');
         } catch (err) {
             this.logger.error('Kon AI-agent niet initialiseren:', err);

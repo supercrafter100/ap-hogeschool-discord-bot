@@ -12,6 +12,10 @@ export default class GuildMemberUpdateHandler extends Event<'guildMemberUpdate'>
         _oldMember: GuildMember | PartialGuildMember,
         member: GuildMember | PartialGuildMember
     ) {
+        // Role syncing only applies to the main configured guild — other servers
+        // the bot lives in have different role structures.
+        if (member.guild.id !== process.env.GUILDID) return;
+
         if (member.partial) {
             try {
                 await member.fetch();

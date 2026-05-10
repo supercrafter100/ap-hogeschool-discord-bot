@@ -8,6 +8,7 @@ import {
     recordExchange,
     syntheticHistory,
 } from '../ai/history.js';
+import { messagesProcessed } from '../util/metrics.js';
 
 // Reply to a message, falling back to a plain channel send if the message was deleted.
 // On fallback, the user's original question is quoted so context isn't lost.
@@ -80,6 +81,8 @@ export default class MessageCreate extends Event<'messageCreate'> {
 
         if (!isMention && !isChainContinuation && !isRestartReply) return;
 
+        messagesProcessed.inc({ guild: msg.guild.id });
+
         // Strip mention prefix from question
         const question = isMention
             ? msg.content.slice(mentionPrefix.length).trim()
@@ -92,11 +95,13 @@ export default class MessageCreate extends Event<'messageCreate'> {
             return;
         }
 
-        // Haal Discord-rollen op (filter @everyone en generieke rollen)
+        // Pass roles regardless of guild — role names may carry context anywhere.
+        // Server name is always passed as a fallback hint for opleiding detection.
         const userRoles =
             msg.member?.roles.cache
                 .filter((r) => r.name !== '@everyone')
                 .map((r) => r.name) ?? [];
+        const serverName = msg.guild.name;
 
         // Chain ophalen of aanmaken
         const chainId = existingChainId ?? startChain();
@@ -150,6 +155,7 @@ export default class MessageCreate extends Event<'messageCreate'> {
                 question: fullQuestion,
                 userId: msg.author.id,
                 userRoles,
+                serverName,
                 chatHistory,
                 onToolStart: (toolName) => {
                     const status = TOOL_STATUS[toolName] ?? `🔧 ${toolName}...`;

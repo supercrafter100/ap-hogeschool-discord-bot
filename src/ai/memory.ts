@@ -48,7 +48,7 @@ export function writeMemory(userId: string | null, key: string, value: string): 
 }
 
 /** Delete a memory for a user. Returns true if something was deleted. */
-export function deleteMemory(userId: string, key: string): boolean {
+export function deleteMemory(userId: string | null, key: string): boolean {
     const store = load();
     const before = store.memories.length;
     store.memories = store.memories.filter((m) => !(m.userId === userId && m.key === key));
@@ -60,5 +60,14 @@ export function deleteMemory(userId: string, key: string): boolean {
 export function formatMemoriesForContext(userId: string): string {
     const memories = readMemories(userId);
     if (memories.length === 0) return '';
-    return memories.map((m) => `${m.key}: ${m.value}`).join('\n');
+    const personal = memories.filter((m) => m.userId !== null);
+    const global = memories.filter((m) => m.userId === null);
+    const parts: string[] = [];
+    if (personal.length) {
+        parts.push('Persoonlijk:\n' + personal.map((m) => `- ${m.key}: ${m.value}`).join('\n'));
+    }
+    if (global.length) {
+        parts.push('Globaal (geldt voor iedereen):\n' + global.map((m) => `- ${m.key}: ${m.value}`).join('\n'));
+    }
+    return parts.join('\n\n');
 }

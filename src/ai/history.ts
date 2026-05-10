@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
 import type { BaseMessage } from '@langchain/core/messages';
+import { activeChains } from '../util/metrics.js';
 
 interface Chain {
     id: string;
@@ -23,6 +24,7 @@ export function startChain(): string {
         lastActivity: new Date(),
         botMessageIds: new Set(),
     });
+    activeChains.set(chains.size);
     return id;
 }
 
@@ -72,6 +74,7 @@ setInterval(
                 chains.delete(id);
             }
         }
+        activeChains.set(chains.size);
     },
     30 * 60 * 1000,
 ).unref();
